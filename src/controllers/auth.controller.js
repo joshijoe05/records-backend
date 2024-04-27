@@ -207,3 +207,85 @@ exports.handleLogout = async (req, res) => {
         });
     }
 };
+
+exports.handleGoogleSSO = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const userValidation = Joi.object({
+            name: Joi.string().required(),
+            email: Joi.string().required(),
+            googleId: Joi.string().required(),
+            profilePicture: Joi.string().required(),
+        });
+
+        const { error } = userValidation.validate(req.body);
+
+        if (error) {
+            return res.status(HttpStatusCode.BadRequest).json({
+                status: HttpStatusConstant.BAD_REQUEST,
+                code: HttpStatusCode.BadRequest,
+                message: error.details[0].message.replace(/"/g, ""),
+            });
+        }
+
+        const userExists = await User.findOne({ email }).select(
+            "email userId -_id",
+        );
+
+        const generatedUserId = generateUUID();
+        const generatedAccessToken = await signToken({
+            userId: !userExists ? generatedUserId : userExists.userId,
+            email,
+        });
+
+        if (!userExists) {
+            await User.create({
+                userId: generatedUserId,
+                isActive: true,
+                isEmailVerified: true,
+                ...req.body,
+            });
+            res.cookie(
+                CommonConstant.signatureCookieName,
+                generatedAccessToken,
+                {
+                    maxAge: 3600000,
+                    httpOnly: false,
+                    secure: true,
+                    sameSite: "none",
+                },
+            )
+                .status(HttpStatusCode.Created)
+                .json({
+                    status: HttpStatusConstant.CREATED,
+                    code: HttpStatusCode.Created,
+                });
+        } else {
+            res.cookie(
+                CommonConstant.signatureCookieName,
+                generatedAccessToken,
+                {
+                    maxAge: 3600000,
+                    httpOnly: false,
+                    secure: true,
+                    sameSite: "none",
+                },
+            )
+                .status(HttpStatusCode.Ok)
+                .json({
+                    status: HttpStatusConstant.OK,
+                    code: HttpStatusCode.Ok,
+                });
+        }
+    } catch (error) {
+        console.log(
+            ErrorLogConstant.authController.handleGoogleLoginErrorLog,
+            error.message,
+        );
+        res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+};
