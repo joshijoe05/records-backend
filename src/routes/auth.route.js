@@ -20,4 +20,7 @@ router.post(
 );
 router.post("/verify-email", authController.handleVerifyEmail);
 
+// Session routes
+router.post("/verify-session", authController.handleVerifiySession);
+
 module.exports = router;

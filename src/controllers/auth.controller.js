@@ -23,10 +23,10 @@ const handleSendEmail = require("./email.controller");
 
 exports.handleRegister = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { username, email, password } = req.body;
 
         const userValidation = Joi.object({
-            name: Joi.string().required(),
+            username: Joi.string().required(),
             email: Joi.string().email().required(),
             password: Joi.string().required(),
         });
@@ -54,10 +54,10 @@ exports.handleRegister = async (req, res) => {
             const generatedUserId = generateUUID();
             await User.create({
                 userId: generatedUserId,
-                name,
+                username,
                 email,
                 isActive: true,
-                profilePicture: `https://avatars.dicebear.com/api/initials/${name.replaceAll(
+                profilePicture: `https://avatars.dicebear.com/api/initials/${username.replaceAll(
                     " ",
                     "-",
                 )}.png`,
@@ -65,7 +65,7 @@ exports.handleRegister = async (req, res) => {
             });
             const generatedAccessToken = await signToken({
                 userId: generatedUserId,
-                name,
+                username,
                 email,
             });
             res.cookie(
@@ -132,10 +132,10 @@ exports.handleLogin = async (req, res) => {
             );
 
             if (isValidPassword) {
-                const { email, name, userId } = user;
+                const { email, username, userId } = user;
                 const generatedAccessToken = await signToken({
                     userId,
-                    name,
+                    username,
                     email,
                 });
                 res.cookie(
@@ -193,6 +193,63 @@ exports.handleLogout = async (req, res) => {
     } catch (error) {
         console.log(
             ErrorLogConstant.authController.handleLogoutErrorLog,
+            error.message,
+        );
+        res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+};
+
+exports.handleVerifiySession = async (req, res) => {
+    try {
+        if (!req.headers.cookie) {
+            return res.status(HttpStatusCode.Unauthorized).json({
+                status: HttpStatusConstant.UNAUTHORIZED,
+                code: HttpStatusCode.Unauthorized,
+            });
+        }
+
+        const accessToken = getRecordSignature(req.headers.cookie);
+
+        if (!accessToken) {
+            return res.status(HttpStatusCode.Unauthorized).json({
+                status: HttpStatusConstant.UNAUTHORIZED,
+                code: HttpStatusCode.Unauthorized,
+            });
+        } else {
+            const decodedToken = await verifyToken(accessToken);
+            if (!decodedToken) {
+                return res.status(HttpStatusCode.Unauthorized).json({
+                    status: HttpStatusConstant.UNAUTHORIZED,
+                    code: HttpStatusCode.Unauthorized,
+                });
+            }
+
+            const user = await User.findOne({
+                userId: decodedToken.userId,
+                isActive: true,
+            }).select(
+                "-password -_id -isManualAuth -createdAt -updatedAt -googleId -__v",
+            );
+
+            if (!user || !user.isActive) {
+                return res.status(HttpStatusCode.Unauthorized).json({
+                    status: HttpStatusConstant.UNAUTHORIZED,
+                    code: HttpStatusCode.Unauthorized,
+                });
+            }
+
+            res.status(HttpStatusCode.Ok).json({
+                status: HttpStatusConstant.OK,
+                code: HttpStatusCode.Ok,
+                data: user,
+            });
+        }
+    } catch (error) {
+        console.log(
+            ErrorLogConstant.authController.handleVerifySessionErrorLog,
             error.message,
         );
         res.status(HttpStatusCode.InternalServerError).json({
