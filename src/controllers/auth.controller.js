@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 // Importing Models
 const User = require("../models/user.model");
 const jwtToken = require("../models/jwt-token.model");
+const verificationToken = require("../models/verification-token.model");
 
 // Importing Constants
 const HttpStatusConstant = require("../constants/http-message.constant");
@@ -16,6 +17,9 @@ const ErrorLogConstant = require("../constants/error-log.constant");
 const generateUUID = require("../helpers/uuid.helper");
 const { signToken, verifyToken } = require("../helpers/jwt.helper");
 const getRecordSignature = require("../helpers/cookie.helper");
+
+// Importing Controllers
+const handleSendEmail = require("./email.controller");
 
 exports.handleRegister = async (req, res) => {
     try {
@@ -208,19 +212,15 @@ exports.handleLogout = async (req, res) => {
     }
 };
 
-exports.handleGoogleSSO = async (req, res) => {
+exports.handleSendVerificationEmail = async (req, res) => {
     try {
         const { email } = req.body;
 
         const userValidation = Joi.object({
-            name: Joi.string().required(),
-            email: Joi.string().required(),
-            googleId: Joi.string().required(),
-            profilePicture: Joi.string().required(),
+            email: Joi.string().email().required(),
         });
 
         const { error } = userValidation.validate(req.body);
-
         if (error) {
             return res.status(HttpStatusCode.BadRequest).json({
                 status: HttpStatusConstant.BAD_REQUEST,
@@ -229,58 +229,75 @@ exports.handleGoogleSSO = async (req, res) => {
             });
         }
 
-        const userExists = await User.findOne({ email }).select(
-            "email userId -_id",
-        );
+        const { userId } = req.userSession;
 
-        const generatedUserId = generateUUID();
-        const generatedAccessToken = await signToken({
-            userId: !userExists ? generatedUserId : userExists.userId,
-            email,
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(HttpStatusCode.NotFound).json({
+                status: HttpStatusConstant.NOT_FOUND,
+                code: HttpStatusCode.NotFound,
+                message: ResponseMessageConstant.USER_NOT_FOUND,
+            });
+        }
+
+        if (user.isEmailVerified) {
+            return res.status(HttpStatusCode.BadRequest).json({
+                status: HttpStatusConstant.BAD_REQUEST,
+                code: HttpStatusCode.BadRequest,
+                message: ResponseMessageConstant.EMAIL_ALREADY_VERIFIED,
+            });
+        }
+
+        if (user.userId !== userId) {
+            return res.status(HttpStatusCode.Forbidden).json({
+                status: HttpStatusConstant.FORBIDDEN,
+                code: HttpStatusCode.Forbidden,
+                message: ResponseMessageConstant.INCORRECT_AUTHENTICATION,
+            });
+        }
+
+        const checkIsVerificationTokenExists = await verificationToken.findOne({
+            userId,
         });
 
-        if (!userExists) {
-            await User.create({
-                userId: generatedUserId,
-                isActive: true,
-                isEmailVerified: true,
-                ...req.body,
-            });
-            res.cookie(
-                CommonConstant.signatureCookieName,
-                generatedAccessToken,
-                {
-                    maxAge: 3600000,
-                    httpOnly: false,
-                    secure: true,
-                    sameSite: "none",
-                },
-            )
-                .status(HttpStatusCode.Created)
-                .json({
-                    status: HttpStatusConstant.CREATED,
-                    code: HttpStatusCode.Created,
-                });
+        let emailAccessTokenId;
+
+        if (checkIsVerificationTokenExists) {
+            emailAccessTokenId =
+                checkIsVerificationTokenExists.verificationTokenId;
         } else {
-            res.cookie(
-                CommonConstant.signatureCookieName,
-                generatedAccessToken,
-                {
-                    maxAge: 3600000,
-                    httpOnly: false,
-                    secure: true,
-                    sameSite: "none",
-                },
-            )
-                .status(HttpStatusCode.Ok)
-                .json({
-                    status: HttpStatusConstant.OK,
-                    code: HttpStatusCode.Ok,
-                });
+            const verificationTokenResponse = await verificationToken.create({
+                verificationTokenId: generateUUID(),
+                userId,
+            });
+            emailAccessTokenId = verificationTokenResponse.verificationTokenId;
+        }
+
+        const isEmailSend = await handleSendEmail({
+            toAddresses: [email],
+            source: CommonConstant.email.source.tech_team,
+            subject: CommonConstant.email.verificationEmail.subject,
+            htmlData: `<p>Hello User <br/>Welcome to Record<br/> Your verification link <a href="${process.env.EMAIL_BASE_URL}/verify-email/${emailAccessTokenId}">Verfiy Email</a></p>`,
+        });
+
+        if (isEmailSend) {
+            res.status(HttpStatusCode.Ok).json({
+                status: HttpStatusConstantttpStatusConstant.OK,
+                code: HttpStatusCode.Ok,
+                message:
+                    ResponseMessageConstant.VERIFICATION_EMAIL_SENT_SUCCESSFULLY,
+            });
+        } else {
+            res.status(HttpStatusCode.InternalServerError).json({
+                status: HttpStatusConstant.ERROR,
+                code: HttpStatusCode.InternalServerError,
+                message: ResponseMessageConstant.VERIFICATION_EMAIL_SENT_FAILED,
+            });
         }
     } catch (error) {
         console.log(
-            ErrorLogConstant.authController.handleGoogleLoginErrorLog,
+            ErrorLogConstant.userController.handleSendVerificationEmailErrorLog,
             error.message,
         );
         res.status(HttpStatusCode.InternalServerError).json({
@@ -290,54 +307,79 @@ exports.handleGoogleSSO = async (req, res) => {
     }
 };
 
-exports.handleVerifiySession = async (req, res) => {
+exports.handleVerifyEmail = async (req, res) => {
     try {
-        if (!req.headers.cookie) {
-            return res.status(HttpStatusCode.Unauthorized).json({
-                status: HttpStatusConstant.UNAUTHORIZED,
-                code: HttpStatusCode.Unauthorized,
+        const { verificationToken } = req.body;
+
+        const userValidation = Joi.object({
+            verificationToken: Joi.string().required(),
+        });
+
+        const { error } = userValidation.validate(req.body);
+        if (error) {
+            return res.status(HttpStatusCode.BadRequest).json({
+                status: HttpStatusConstant.BAD_REQUEST,
+                code: HttpStatusCode.BadRequest,
+                message: error.details[0].message.replace(/"/g, ""),
             });
         }
 
-        const accessToken = getRecordSignature(req.headers.cookie);
+        const checkIsVerificationTokenExists = await verificationToken.findOne({
+            verificationTokenId: verificationToken,
+        });
 
-        if (!accessToken) {
-            return res.status(HttpStatusCode.Unauthorized).json({
-                status: HttpStatusConstant.UNAUTHORIZED,
-                code: HttpStatusCode.Unauthorized,
+        if (!checkIsVerificationTokenExists) {
+            return res.status(HttpStatusCode.NotFound).json({
+                status: HttpStatusConstant.NOT_FOUND,
+                code: HttpStatusCode.NotFound,
+                message: ResponseMessageConstant.VERIFICATION_TOKEN_NOT_FOUND,
             });
         } else {
-            const decodedToken = await verifyToken(accessToken);
-            if (!decodedToken) {
-                return res.status(HttpStatusCode.Unauthorized).json({
-                    status: HttpStatusConstant.UNAUTHORIZED,
-                    code: HttpStatusCode.Unauthorized,
-                });
-            }
+            const { userId } = checkIsVerificationTokenExists;
 
-            const user = await User.findOne({
-                userId: decodedToken.userId,
-                isActive: true,
-            }).select(
-                "-password -_id -isManualAuth -createdAt -updatedAt -googleId -__v",
-            );
-
-            if (!user || !user.isActive) {
-                return res.status(HttpStatusCode.Unauthorized).json({
-                    status: HttpStatusConstant.UNAUTHORIZED,
-                    code: HttpStatusCode.Unauthorized,
-                });
-            }
-
-            res.status(HttpStatusCode.Ok).json({
-                status: HttpStatusConstant.OK,
-                code: HttpStatusCode.Ok,
-                data: userResponse,
+            const checkIsUserExists = await User.findOne({
+                userId,
             });
+
+            if (!checkIsUserExists) {
+                return res.status(HttpStatusCode.NotFound).json({
+                    status: HttpStatusConstant.NOT_FOUND,
+                    code: HttpStatusCode.NotFound,
+                    message: ResponseMessageConstant.USER_NOT_FOUND,
+                });
+            } else {
+                if (checkIsUserExists.isEmailVerified) {
+                    return res.status(HttpStatusCode.BadRequest).json({
+                        status: HttpStatusConstant.BAD_REQUEST,
+                        code: HttpStatusCode.BadRequest,
+                        message: ResponseMessageConstant.EMAIL_ALREADY_VERIFIED,
+                    });
+                } else {
+                    await User.findOneAndUpdate(
+                        {
+                            userId,
+                        },
+                        {
+                            $set: {
+                                isEmailVerified: true,
+                            },
+                        },
+                    );
+                    await verificationToken.findOneAndDelete({
+                        verificationTokenId: verificationToken,
+                    });
+                    res.status(HttpStatusCode.Ok).json({
+                        status: HttpStatusConstant.OK,
+                        code: HttpStatusCode.Ok,
+                        message:
+                            ResponseMessageConstant.EMAIL_VERIFIED_SUCCESSFULLY,
+                    });
+                }
+            }
         }
     } catch (error) {
         console.log(
-            ErrorLogConstant.authController.handleVerifySessionErrorLog,
+            ErrorLogConstant.userController.handleSendVerificationEmailErrorLog,
             error.message,
         );
         res.status(HttpStatusCode.InternalServerError).json({
