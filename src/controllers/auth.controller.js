@@ -15,6 +15,7 @@ const ErrorLogConstant = require("../constants/error-log.constant");
 // Importing Helpers
 const generateUUID = require("../helpers/uuid.helper");
 const { signToken, verifyToken } = require("../helpers/jwt.helper");
+const getRecordSignature = require("../helpers/cookie.helper");
 
 exports.handleRegister = async (req, res) => {
     try {
@@ -169,6 +170,35 @@ exports.handleLogin = async (req, res) => {
     } catch (error) {
         console.log(
             ErrorLogConstant.authController.handleLoginErrorLog,
+            error.message,
+        );
+        res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+};
+
+exports.handleLogout = async (req, res) => {
+    try {
+        const accessToken = getRecordSignature(req.headers.cookie);
+
+        await jwtToken.findOneAndDelete({
+            jwtTokenId: accessToken,
+        });
+
+        res.clearCookie(CommonConstant.signatureCookieName, {
+            secure: true,
+            sameSite: "none",
+        })
+            .status(HttpStatusCode.Ok)
+            .json({
+                status: HttpStatusConstant.OK,
+                code: HttpStatusCode.Ok,
+            });
+    } catch (error) {
+        console.log(
+            ErrorLogConstant.authController.handleLogoutErrorLog,
             error.message,
         );
         res.status(HttpStatusCode.InternalServerError).json({
