@@ -142,6 +142,32 @@ exports.handleCreateYouTubeCourse = async (req, res) => {
     }
 };
 
-exports.handleGetAllNotStartedCoursesByUserId = async (req, res) => {};
+exports.handleGetAllNotStartedCoursesByUserId = async (req, res) => {
+    try {
+        const { userId } = req.userSession;
+
+        const youtubeCourseResponse = await Youtube_Course.find({
+            authorId: userId,
+        });
+
+        res.status(HttpStatusCode.Ok).json({
+            status: httpStatusConstant.SUCCESS,
+            code: HttpStatusCode.Ok,
+            data: youtubeCourseResponse,
+        });
+    } catch (error) {
+        console.log(
+            ErrorLogConstant.youtubeController
+                .handleGetAllNotStartedCoursesByUserIdErrorLog,
+            err.message,
+        );
+        res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+};
+
 exports.handleGetCourseDetails = async (req, res) => {};
+
 exports.handleDeleteCourseByCourseId = async (req, res) => {};
