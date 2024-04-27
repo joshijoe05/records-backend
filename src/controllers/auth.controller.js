@@ -289,3 +289,60 @@ exports.handleGoogleSSO = async (req, res) => {
         });
     }
 };
+
+exports.handleVerifiySession = async (req, res) => {
+    try {
+        if (!req.headers.cookie) {
+            return res.status(HttpStatusCode.Unauthorized).json({
+                status: HttpStatusConstant.UNAUTHORIZED,
+                code: HttpStatusCode.Unauthorized,
+            });
+        }
+
+        const accessToken = getRecordSignature(req.headers.cookie);
+
+        if (!accessToken) {
+            return res.status(HttpStatusCode.Unauthorized).json({
+                status: HttpStatusConstant.UNAUTHORIZED,
+                code: HttpStatusCode.Unauthorized,
+            });
+        } else {
+            const decodedToken = await verifyToken(accessToken);
+            if (!decodedToken) {
+                return res.status(HttpStatusCode.Unauthorized).json({
+                    status: HttpStatusConstant.UNAUTHORIZED,
+                    code: HttpStatusCode.Unauthorized,
+                });
+            }
+
+            const user = await User.findOne({
+                userId: decodedToken.userId,
+                isActive: true,
+            }).select(
+                "-password -_id -isManualAuth -createdAt -updatedAt -googleId -__v",
+            );
+
+            if (!user || !user.isActive) {
+                return res.status(HttpStatusCode.Unauthorized).json({
+                    status: HttpStatusConstant.UNAUTHORIZED,
+                    code: HttpStatusCode.Unauthorized,
+                });
+            }
+
+            res.status(HttpStatusCode.Ok).json({
+                status: HttpStatusConstant.OK,
+                code: HttpStatusCode.Ok,
+                data: userResponse,
+            });
+        }
+    } catch (error) {
+        console.log(
+            ErrorLogConstant.authController.handleVerifySessionErrorLog,
+            error.message,
+        );
+        res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+};
