@@ -20,7 +20,7 @@ const handleSendEmail = async (payload) => {
         Message: {
             Body: {
                 Html: {
-                    Charset: commonConstant.email.charSet,
+                    Charset: CommonConstant.email.charSet,
                     Data: htmlData,
                 },
             },

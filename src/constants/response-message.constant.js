@@ -4,8 +4,6 @@ module.exports = {
     ACCESS_DENIED: "Access Denied!",
     REQUIRED_TOKEN: "Token is required!",
     INVALID_CREDENTIALS: "Invalid Credentials!",
-    ACCOUNT_ASSOCIATED_WITH_GOOGLE:
-        "Account associated with google, Please login with google!",
     INCORRECT_AUTHENTICATION: "Incorrect authentication!",
 
     // User messages

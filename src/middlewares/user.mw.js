@@ -47,12 +47,6 @@ const verifyUser = async (req, res, next) => {
                 });
             }
 
-            res.status(HttpStatusCode.Ok).json({
-                status: HttpStatusConstant.OK,
-                code: HttpStatusCode.Ok,
-                data: user,
-            });
-
             req.userSession = decodedToken;
             next();
         }

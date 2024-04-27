@@ -28,7 +28,7 @@ exports.handleRegister = async (req, res) => {
         const userValidation = Joi.object({
             name: Joi.string().required(),
             email: Joi.string().email().required(),
-            password: Joi.string().min(3).max(8).required(),
+            password: Joi.string().required(),
         });
 
         const { error } = userValidation.validate(req.body);
@@ -57,7 +57,6 @@ exports.handleRegister = async (req, res) => {
                 name,
                 email,
                 isActive: true,
-                isManualAuth: true,
                 profilePicture: `https://avatars.dicebear.com/api/initials/${name.replaceAll(
                     " ",
                     "-",
@@ -127,15 +126,6 @@ exports.handleLogin = async (req, res) => {
                 message: ResponseMessageConstant.USER_NOT_FOUND,
             });
         } else {
-            if (!user.isManualAuth) {
-                return res.status(HttpStatusCode.BadRequest).json({
-                    status: HttpStatusConstant.BAD_REQUEST,
-                    code: HttpStatusCode.BadRequest,
-                    message:
-                        ResponseMessageConstant.ACCOUNT_ASSOCIATED_WITH_GOOGLE,
-                });
-            }
-
             const isValidPassword = await bcrypt.compare(
                 password,
                 user.password,
@@ -221,6 +211,7 @@ exports.handleSendVerificationEmail = async (req, res) => {
         });
 
         const { error } = userValidation.validate(req.body);
+
         if (error) {
             return res.status(HttpStatusCode.BadRequest).json({
                 status: HttpStatusConstant.BAD_REQUEST,
@@ -282,14 +273,14 @@ exports.handleSendVerificationEmail = async (req, res) => {
         });
 
         if (isEmailSend) {
-            res.status(HttpStatusCode.Ok).json({
-                status: HttpStatusConstantttpStatusConstant.OK,
+            return res.status(HttpStatusCode.Ok).json({
+                status: HttpStatusConstant.OK,
                 code: HttpStatusCode.Ok,
                 message:
                     ResponseMessageConstant.VERIFICATION_EMAIL_SENT_SUCCESSFULLY,
             });
         } else {
-            res.status(HttpStatusCode.InternalServerError).json({
+            return res.status(HttpStatusCode.InternalServerError).json({
                 status: HttpStatusConstant.ERROR,
                 code: HttpStatusCode.InternalServerError,
                 message: ResponseMessageConstant.VERIFICATION_EMAIL_SENT_FAILED,
@@ -300,7 +291,7 @@ exports.handleSendVerificationEmail = async (req, res) => {
             ErrorLogConstant.userController.handleSendVerificationEmailErrorLog,
             error.message,
         );
-        res.status(HttpStatusCode.InternalServerError).json({
+        return res.status(HttpStatusCode.InternalServerError).json({
             status: HttpStatusConstant.ERROR,
             code: HttpStatusCode.InternalServerError,
         });
@@ -309,10 +300,10 @@ exports.handleSendVerificationEmail = async (req, res) => {
 
 exports.handleVerifyEmail = async (req, res) => {
     try {
-        const { verificationToken } = req.body;
+        const { verification_token } = req.body;
 
         const userValidation = Joi.object({
-            verificationToken: Joi.string().required(),
+            verification_token: Joi.string().required(),
         });
 
         const { error } = userValidation.validate(req.body);
@@ -325,7 +316,7 @@ exports.handleVerifyEmail = async (req, res) => {
         }
 
         const checkIsVerificationTokenExists = await verificationToken.findOne({
-            verificationTokenId: verificationToken,
+            verificationTokenId: verification_token,
         });
 
         if (!checkIsVerificationTokenExists) {
