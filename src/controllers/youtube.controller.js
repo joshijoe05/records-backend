@@ -151,7 +151,7 @@ exports.handleGetAllNotStartedCoursesByUserId = async (req, res) => {
         });
 
         res.status(HttpStatusCode.Ok).json({
-            status: httpStatusConstant.SUCCESS,
+            status: HttpStatusConstant.SUCCESS,
             code: HttpStatusCode.Ok,
             data: youtubeCourseResponse,
         });
@@ -159,7 +159,7 @@ exports.handleGetAllNotStartedCoursesByUserId = async (req, res) => {
         console.log(
             ErrorLogConstant.youtubeController
                 .handleGetAllNotStartedCoursesByUserIdErrorLog,
-            err.message,
+            error.message,
         );
         res.status(HttpStatusCode.InternalServerError).json({
             status: HttpStatusConstant.ERROR,
@@ -168,6 +168,53 @@ exports.handleGetAllNotStartedCoursesByUserId = async (req, res) => {
     }
 };
 
-exports.handleGetCourseDetails = async (req, res) => {};
+exports.handleGetCourseDetails = async (req, res) => {
+    try {
+        const { courseId } = req.params;
+        const { userId } = req.userSession;
+
+        const courseIdValidation = Joi.object({
+            courseId: Joi.string().required(),
+        });
+
+        const { error } = courseIdValidation.validate(req.params);
+
+        if (error) {
+            return res.status(HttpStatusCode.BadRequest).json({
+                status: HttpStatusConstant.BAD_REQUEST,
+                code: HttpStatusCode.BadRequest,
+                message: error.details[0].message.replace(/"/g, ""),
+            });
+        }
+
+        const youtubeCourseResponse = await Youtube_Course.findOne({
+            youtubeCourseId: courseId,
+            authorId: userId,
+        }).select("-_id -__v");
+
+        if (!youtubeCourseResponse) {
+            return res.status(HttpStatusCode.NotFound).json({
+                status: HttpStatusConstant.NOT_FOUND,
+                code: HttpStatusCode.NotFound,
+                message: ResponseMessageConstant.COURSE_NOT_FOUND,
+            });
+        }
+
+        res.status(HttpStatusCode.Ok).json({
+            status: HttpStatusConstant.SUCCESS,
+            code: HttpStatusCode.Ok,
+            data: youtubeCourseResponse,
+        });
+    } catch (error) {
+        console.log(
+            ErrorLogConstant.youtubeController.handleGetCourseDetailsErrorLog,
+            error.message,
+        );
+        res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+};
 
 exports.handleDeleteCourseByCourseId = async (req, res) => {};
