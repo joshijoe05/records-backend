@@ -217,4 +217,7 @@ exports.handleGetCourseDetails = async (req, res) => {
     }
 };
 
-exports.handleDeleteCourseByCourseId = async (req, res) => {};
+exports.handleDeleteCourseByCourseId = async (req, res) => {
+    try {
+    } catch (error) {}
+};
