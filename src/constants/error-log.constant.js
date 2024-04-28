@@ -22,6 +22,8 @@ module.exports = {
             "🚀 ~ file: user.controller.js ~ handleUpdateUsername ~ err",
         handleSendVerificationEmailErrorLog:
             "🚀 ~ file: user.controller.js ~ handleSendVerificationEmail ~ err",
+        handleResetPassEmailErrorLog:
+            "🚀 ~ file: user.controller.js ~ handleSendVerificationEmail ~ err",
         handleOnBoardingErrorLog:
             "🚀 ~ file: user.controller.js ~ handleOnBoarding ~ err",
         handleGetUserProfileInfoErrorLog:

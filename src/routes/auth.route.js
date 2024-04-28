@@ -23,4 +23,8 @@ router.post("/verify-email", authController.handleVerifyEmail);
 // Session routes
 router.post("/verify-session", authController.handleVerifiySession);
 
+// reset password routes
+router.post("/send/reset-password-email", authController.handleSendResetPassMail);
+router.post("/reset-password", authController.handleResetPass);
+
 module.exports = router;

@@ -436,3 +436,120 @@ exports.handleVerifyEmail = async (req, res) => {
         });
     }
 };
+
+exports.handleSendResetPassMail = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const userValidation = Joi.object({
+            email: Joi.string().email().required(),
+        });
+
+        const { error } = userValidation.validate(req.body);
+
+        if (error) {
+            return res.status(HttpStatusCode.BadRequest).json({
+                status: HttpStatusConstant.BAD_REQUEST,
+                code: HttpStatusCode.BadRequest,
+                message: error.details[0].message.replace(/"/g, ""),
+            });
+        }
+
+        const user = await User.findOne({
+            email,
+        });
+
+        if (!user) {
+            return res.status(HttpStatusCode.NotFound).json({
+                status: HttpStatusConstant.NOT_FOUND,
+                code: HttpStatusCode.NotFound,
+                message: ResponseMessageConstant.USER_NOT_FOUND,
+            });
+        }
+
+        const isEmailSend = await handleSendEmail({
+            toAddresses: [email],
+            source: CommonConstant.email.source.tech_team,
+            subject: CommonConstant.email.resetPasswordEmail.subject,
+            htmlData: `<p>Hello User <br/>Welcome to Record<br/> Your password reset link <a href="${process.env.EMAIL_BASE_URL}/reset-password/${emailAccessTokenId}">Reset Password</a></p>`,
+        });
+
+        if (isEmailSend) {
+            return res.status(HttpStatusCode.Ok).json({
+                status: HttpStatusConstant.OK,
+                code: HttpStatusCode.Ok,
+                message:
+                    ResponseMessageConstant.VERIFICATION_EMAIL_SENT_SUCCESSFULLY,
+            });
+        } else {
+            return res.status(HttpStatusCode.InternalServerError).json({
+                status: HttpStatusConstant.ERROR,
+                code: HttpStatusCode.InternalServerError,
+                message: ResponseMessageConstant.VERIFICATION_EMAIL_SENT_FAILED,
+            });
+        }
+    }
+    catch (error) {
+        console.log(
+            ErrorLogConstant.userController.handleResetPassEmailErrorLog,
+            error.message,
+        );
+        return res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+}
+
+
+exports.handleResetPass = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        const userValidation = Joi.object({
+            email: Joi.string().email().required(),
+            password: Joi.string().required()
+        });
+
+        const { error } = userValidation.validate(req.body);
+
+        if (error) {
+            return res.status(HttpStatusCode.BadRequest).json({
+                status: HttpStatusConstant.BAD_REQUEST,
+                code: HttpStatusCode.BadRequest,
+                message: error.details[0].message.replace(/"/g, ""),
+            });
+        }
+
+        const user = await User.findOne({
+            email,
+        });
+
+        if (!user) {
+            return res.status(HttpStatusCode.NotFound).json({
+                status: HttpStatusConstant.NOT_FOUND,
+                code: HttpStatusCode.NotFound,
+                message: ResponseMessageConstant.USER_NOT_FOUND,
+            });
+        }
+
+        const encryptedPassword = await bcrypt.hash(password, 10);
+        user.password = encryptedPassword;
+        await user.save();
+
+        return res.status(HttpStatusCode.Ok).json({
+            status: HttpStatusConstant.UPDATED,
+            code: HttpStatusCode.Ok,
+        });
+    }
+    catch (error) {
+        console.log(
+            ErrorLogConstant.userController.handleResetPassEmailErrorLog,
+            error.message
+        );
+        return res.status(HttpStatusCode.InternalServerError).json({
+            status: HttpStatusConstant.ERROR,
+            code: HttpStatusCode.InternalServerError,
+        });
+    }
+}
